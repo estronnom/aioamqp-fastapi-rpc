@@ -1,0 +1,50 @@
+version: '3.2'
+services:
+
+  rabbitmq:
+    image: 'rabbitmq:3.8-management-alpine'
+    restart: 'always'
+    ports:
+      - '15672:15672'
+    volumes:
+      - 'rabbitmq-volume:/var/lib/rabbitmq'
+
+#  server:
+#    build: './server'
+#    command: 'uvicorn main:app --host 0.0.0.0 --reload'
+#    volumes:
+#      - './server/app:/server/app'
+#    restart: 'always'
+#    ports:
+#      - '8000:8000'
+#    env_file:
+#      - '.env'
+#    depends_on:
+#      - 'rabbitmq'
+
+  echo:
+    build: './backend'
+    restart: 'always'
+    environment:
+      - 'APP=echo'
+    volumes:
+      - './server/app/api/utils:/app/echo/utils'
+    env_file:
+      - '.env'
+    depends_on:
+      - 'rabbitmq'
+
+#  shuffle:
+#    build: './backend'
+#    restart: 'always'
+#    environment:
+#      - 'APP=shuffle'
+#    volumes:
+#      - './server/app/api/utils:/app/shuffle/utils'
+#    env_file:
+#      - '.env'
+#    depends_on:
+#      - 'rabbitmq'
+
+volumes:
+  rabbitmq-volume:
