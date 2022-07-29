@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter
 
-from .utils.schema import TaskIn
-from .utils.amqpinterface import RPC
+from .schema import TaskIn
+from .utils.amqpinterface import RPCClient
 
 router = APIRouter()
 
@@ -10,7 +10,7 @@ router = APIRouter()
 async def do_task(
         task: TaskIn
 ):
-    rpc = RPC()
-    response = await rpc.call(task.task, task.dataIn)
+    client = RPCClient()
+    response = await client.call(task.task, task.data_in)
     return response
 

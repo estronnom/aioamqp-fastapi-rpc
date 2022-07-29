@@ -14,6 +14,7 @@ services:
     command: 'uvicorn main:app --host 0.0.0.0 --reload'
     volumes:
       - './server/app:/server/app'
+      - './utils:/server/app/api/utils'
     restart: 'always'
     ports:
       - '8000:8000'
@@ -28,7 +29,7 @@ services:
     environment:
       - 'APP=echo'
     volumes:
-      - './server/app/api/utils:/app/echo/utils'
+      - './utils:/app/echo/utils'
     env_file:
       - '.env'
     depends_on:

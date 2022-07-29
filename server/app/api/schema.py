@@ -6,7 +6,7 @@ from typing import Any
 
 class TaskIn(BaseModel):
     task: str
-    dataIn: Any = None
+    data_in: Any = None
 
 
 
