@@ -15,7 +15,7 @@ class AMQP:
         self.__host = os.getenv('RABBITMQHOST', default='localhost')
         self.__port = os.getenv('RABBITMQPORT', default='5672')
 
-    async def __connect(self):
+    async def _connect(self):
         try:
             self.transport, self.protocol = await aioamqp.connect(
                 host=self.__host,
@@ -25,7 +25,7 @@ class AMQP:
             print('Unable to connect to rabbitmq')
             print(exc)
             await asyncio.sleep(5)
-            await self.__connect()
+            await self._connect()
         else:
             self.channel = await self.protocol.channel()
             await self.channel.exchange(
@@ -41,7 +41,7 @@ class AMQP:
 
     async def get_chan(self):
         if not self.channel:
-            await self.__connect()
+            await self._connect()
         return self.channel
 
 
@@ -64,7 +64,7 @@ class RPCClient(AMQP):
 
     async def send_task(self, task, data):
         if not self.channel:
-            await self.__connect()
+            await self._connect()
 
         corr_id = str(uuid.uuid1())
         self.tasks_id[corr_id] = task
@@ -126,7 +126,7 @@ class RPCServer(AMQP):
         print(f'{self.app_name.capitalize()} sent a response')
 
     async def __consume(self):
-        await self.__connect()
+        await self._connect()
         await self.channel.queue(
             queue_name=self.app_name,
             durable=True
