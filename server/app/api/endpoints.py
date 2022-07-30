@@ -8,9 +8,16 @@ router = APIRouter()
 
 @router.post('/do')
 async def do_task(
-        task: TaskIn
+        task_list: TaskIn
 ):
-    client = RPCClient()
-    response = await client.call(task.task, task.data_in)
+    rpc = RPCClient()
+    data = task_list.dict()['task_list']
+
+    for item in data:
+        await rpc.send_task(item['task'], item['data'])
+
+    response = await rpc.get_results()
     return response
+
+
 

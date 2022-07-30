@@ -11,10 +11,11 @@ class AMQP:
         self.protocol = None
         self.channel = None
         self.tasks_exc = os.getenv('TASKEXCHANGE')
+        self.result_queue = os.getenv('RESULTQUEUE')
         self.__host = os.getenv('RABBITMQHOST', default='localhost')
         self.__port = os.getenv('RABBITMQPORT', default='5672')
 
-    async def connect(self):
+    async def __connect(self):
         try:
             self.transport, self.protocol = await aioamqp.connect(
                 host=self.__host,
@@ -24,7 +25,7 @@ class AMQP:
             print('Unable to connect to rabbitmq')
             print(exc)
             await asyncio.sleep(5)
-            await self.connect()
+            await self.__connect()
         else:
             self.channel = await self.protocol.channel()
             await self.channel.exchange(
@@ -33,55 +34,66 @@ class AMQP:
                 durable=True
             )
 
+            await self.channel.queue(
+                queue_name=self.result_queue,
+                durable=True
+            )
+
     async def get_chan(self):
         if not self.channel:
-            await self.connect()
+            await self.__connect()
         return self.channel
 
 
 class RPCClient(AMQP):
     def __init__(self):
-        self.response = None
-        self.corr_id = str(uuid.uuid1())
-        self.callback_queue = None
+        self.tasks_id = dict()
+        self.response = list()
         self.waiter = asyncio.Event()
         super(RPCClient, self).__init__()
 
-    async def connect(self):
-        await super(RPCClient, self).connect()
-
-        result = await self.channel.queue(exclusive=True)
-        self.callback_queue = result['queue']
-        await self.channel.basic_consume(
-            self.__callback,
-            no_ack=True,
-            queue_name=self.callback_queue,
-        )
-
     async def __callback(self, channel, body, envelope, properties):
-        if self.corr_id == properties.correlation_id:
-            self.response = body.decode()
-
-        self.waiter.set()
-
-    async def call(self, task, data):
         print('RPC client got a callback')
-        await self.connect()
+        if properties.correlation_id in self.tasks_id:
+            body = body.decode()
+            self.response.append(body)
+            self.tasks_id.pop(properties.correlation_id)
+
+        if not self.tasks_id:
+            self.waiter.set()
+
+    async def send_task(self, task, data):
+        if not self.channel:
+            await self.__connect()
+
+        corr_id = str(uuid.uuid1())
+        self.tasks_id[corr_id] = task
 
         await self.channel.basic_publish(
             payload=data.encode(),
             exchange_name=self.tasks_exc,
             routing_key=task,
             properties={
-                'reply_to': self.callback_queue,
-                'correlation_id': self.corr_id,
+                'reply_to': self.result_queue,
+                'correlation_id': corr_id,
             }
         )
         print('RPC client sent a task')
+
+    async def get_results(self):
+        print('RPC client waiting for results')
+        await self.channel.basic_consume(
+            self.__callback,
+            no_ack=True,
+            queue_name=self.result_queue,
+        )
+
         await self.waiter.wait()
+        print('RPC client collected all responses')
         await self.protocol.close()
-        print('RPC client got a response')
-        return self.response
+        response = self.response.copy()
+        self.__init__()
+        return response
 
 
 class RPCServer(AMQP):
@@ -97,6 +109,7 @@ class RPCServer(AMQP):
 
         task_success, task_response = await self.task(body)
         payload = {
+            "task": self.app_name,
             "success": task_success,
             "response": task_response
         }
@@ -113,8 +126,8 @@ class RPCServer(AMQP):
         print(f'{self.app_name.capitalize()} sent a response')
 
     async def __consume(self):
-        await self.connect()
-        queue = await self.channel.queue(
+        await self.__connect()
+        await self.channel.queue(
             queue_name=self.app_name,
             durable=True
         )
