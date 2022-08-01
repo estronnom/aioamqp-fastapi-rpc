@@ -137,13 +137,6 @@ class RPCServer(AMQP):
             routing_key=self.app_name
         )
 
-        print(f'Queue {self.app_name} created')
-        await self.channel.basic_qos(
-            prefetch_count=1,
-            prefetch_size=0,
-            connection_global=False
-        )
-
         print(f'{self.app_name.capitalize()} listening')
         await self.channel.basic_consume(
             self.__callback,
